@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<!-- built: @timestamp@ version: @version@ author: @user.name@ -->
+<html lang="en">
+<head>
+	<meta http-equiv="content-type" content="text/html; charset=UTF8">
+
+	<link href="css/style.css" rel="stylesheet" type="text/css">
+	<link href="css/slick.grid.css" rel="stylesheet" type="text/css">
+    
+	<script type="text/javascript" src="lib/jquery-1.10.2.js"></script>
+	<script type="text/javascript" src="lib/handlebars-1.1.2.js"></script>
+	<script type="text/javascript" src="lib/ember-1.4.0.js"></script>
+	@lib.js@
+    
+</head>
+<body id="app">
+<script type="text/javascript">
+$(function() {
+	$.get('template/application.hb', function(data) {
+        $(data).filter('script[type="text/x-handlebars"]').each(function(index) {
+            Ember.TEMPLATES[$(this).attr('data-template-name')] = Ember.Handlebars.compile($(this).html());
+        });
+        
+        App.advanceReadiness();
+	});
+});
+</script>
+<script src="@app.js@"></script>
+</body>
+</html>

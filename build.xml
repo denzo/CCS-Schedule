@@ -1,0 +1,357 @@
+<?xml version="1.0" encoding="utf-8"?>
+<project name="CCS Schedule" default="properties" basedir=".">
+
+	<taskdef resource="net/sf/antcontrib/antcontrib.properties"></taskdef> 
+	
+    <target name="version">
+        <loadfile property="version.old" srcFile="version.txt" />
+        <input message="Current version number is ${version.old}. Please enter the new version number:"
+            defaultValue="${version.old}" addproperty="version"/>
+        <echo file="version.txt" message="${version}" />
+    </target>
+	
+    <target name="version-current">
+        <loadfile property="version" srcFile="version.txt" />
+    </target>
+	
+	
+    <!-- PROPERTIES -->
+    <target name="properties" depends="version">
+        <tstamp>
+            <format property="timestamp" pattern="yyyyMMdd-HHmmss"/>
+        </tstamp>
+        <!-- allow user-specific overrides -->
+        <property file="build.user.properties"/>
+        <property file="build.properties"/>
+    </target>
+    
+    <!-- JSHint-->
+  	<target name="jshint" depends="version, properties">
+  		<echo>Getting js files...</echo>
+        <fileset id="jsFileList" dir="${dir.src}/app" includes="**/*.js"/>
+        <pathconvert pathsep="," property="files" refid="jsFileList"/>
+        <echo>Checking syntax...</echo>
+      	<exec executable="${file.phantomjs}" failonerror="true">
+          <arg line="'${file.jshint-runner.js}'" />
+          <arg line="'${file.jshint.js}'" />
+          <arg line="'${files}'" />
+      	</exec>
+        <echo>Finished.</echo>
+  	</target>
+	
+    <!-- CREATE BUILD --> 
+    <target name="create_build">
+        <echo>Creating build...</echo>
+        <delete dir="${dir.build}" />
+        <mkdir dir="${dir.build.current}" />
+        <echo>Finished.</echo>
+    </target>
+	
+    <!-- CREATE BIN --> 
+    <target name="create_bin">
+	    <delete dir="${dir.bin}" />
+	    <move file="${dir.build.current}" tofile="${dir.bin}"/>
+    </target>
+
+    <!-- CONSOLIDATE APP -->
+    <target name="consolidate">
+        <echo>Consolidating...</echo>
+    	<!-- Create a single file for all the JavaScript files -->
+        <concat id="srcfiles" destfile="${file.path.app.consolidated}" fixlastline="yes">
+            <fileset dir="${dir.src}/app" includes="**/*.js"/>
+        </concat>
+    	<!-- Create a single file for all the Handlebars templates -->
+    	<concat destfile="${dir.build.current}/template/application.hb" append="true">
+            <fileset dir="${dir.src}/app/template" includes="**/*.hb"/>
+        </concat>
+        <echo>Finished.</echo>
+    </target>
+	
+    <!-- CONSOLIDATE LIBRARIES -->
+    <target name="consolidate-lib">
+        <echo>Consolidating libs...</echo>
+    	<!-- Create a single file for all the JavaScript files -->
+        <concat id="srcfiles" destfile="${file.path.lib.consolidated}" append="true">
+            <fileset dir="${dir.src}/lib" includes="*.js"/>
+        </concat>
+        <echo>Finished.</echo>
+    </target>
+	
+    <!-- SPECS -->
+    <target name="specs" depends="properties">
+        <echo>Running specs...</echo>
+        <exec executable="phantomjs" dir="${basedir}" failonerror="true" resultproperty="specs.results">
+            <arg line="'${file.jasmine-runner.js}'" />
+            <arg line="'${file.specs-runner.html}'" />
+            <arg line="${timeout.phantom}" />
+        </exec>
+        <echo>Finished.</echo>
+    </target>
+	
+    <!-- MINIFY -->
+    <target name="minify" depends="properties, jshint, create_build, consolidate">
+        <echo>Minifying...</echo>
+        <exec executable="java" dir="${basedir}" failonerror="true">
+            <arg line="-jar '${file.yui_compressor.jar}'" />
+            <arg line="--type js" />
+            <arg line="-o '${file.path.app.minified}'" />
+            <arg line="'${file.path.app.consolidated}'" />
+        </exec>
+        <echo>Finished</echo>
+    </target>
+	
+    <!-- MINIFY LIBRARIES -->
+    <target name="minify-lib" depends="properties, jshint, create_build, consolidate">
+        <echo>Minifying libs...</echo>
+        <exec executable="java" dir="${basedir}" failonerror="true">
+            <arg line="-jar '${file.yui_compressor.jar}'" />
+            <arg line="--type js" />
+            <arg line="-o '${file.path.lib.minified}'" />
+            <arg line="'${file.path.lib.consolidated}'" />
+            <arg line="--charset utf-8" />
+        </exec>
+        <echo>Finished</echo>
+    </target>
+	
+	<!-- INSERT LIB SCRIPT TAGS -->
+    <target name="insert-lib-script-tags" depends="properties">
+    	<sequential>
+    		<antcall target="create-lib-script-tags" />
+    		<loadfile property="lib.tags" srcfile="${file.lib-script-tags}" />
+	        <copy file="${dir.src}/index.html" tofile="${dir.build.current}/index.html" overwrite="true">
+	        	<filterset>
+	    	    	<filter token="app.js" value="${file.name.app.consolidated}"/>
+	    	    	<filter token="lib.js" value="${lib.tags}"/>
+	        		<filter token="timestamp" value="${timestamp}"/>
+	        		<filter token="version" value="${version}"/>
+	    	    	<filter token="user.name" value="${user.name}"/>
+	    	    </filterset>
+	        </copy>
+    		<delete file="${file.lib-script-tags}" />
+    	</sequential>
+    </target>
+	
+    <!-- FINISH DEBUG -->
+    <target name="finish" depends="properties">
+        <echo>Finishing debug version...</echo>
+        
+    	<!-- Copy lib folder from src to the current build folder -->
+    	<copy todir="${dir.build.current}/lib" flatten="true" includeemptydirs="false">
+    		<fileset dir="${dir.src}/lib" />
+    	</copy>
+    	
+    	<!-- Copy css folder from src to the current build folder -->
+    	<copy todir="${dir.build.current}/css" failonerror="false">
+    		<fileset dir="${dir.src}/css"/>
+    	</copy>
+    	
+    	<!-- Copy data folder to the current build folder -->
+    	<copy todir="${dir.build.current}/data" failonerror="false">
+    		<fileset dir="${dir.data}"/>
+    	</copy>
+    	
+    	<copy file="${dir.src}/no-ie-message.html" tofile="${dir.build.current}/no-ie-message.html" overwrite="true" />
+    	
+        <echo>Finished debug version.</echo>
+    </target>
+	
+	
+	<!-- Copy css folder from src to the current build folder -->
+	<target name="copy-all-css">
+		<copy todir="${dir.build.current}/css">
+    		<fileset dir="${dir.src}/css"/>
+    	</copy>
+	</target>
+	
+	<target name="copy-my-css">
+		<copy todir="${dir.build.current}/css" file="${dir.src}/css/style.css" />
+	</target>
+	
+	
+	
+	
+    <target name="finish-build" depends="properties">
+        <echo>Finishing...</echo>
+        
+    	<!-- Copy css folder from src to the current build folder -->
+    	<copy todir="${dir.build.current}/css">
+    		<fileset dir="${dir.src}/css"/>
+    	</copy>
+    	
+    	<!-- Copy data folder to the current build folder -->
+    	<copy todir="${dir.build.current}/data">
+    		<fileset dir="${dir.data}"/>
+    	</copy>
+    	
+    	<!-- Copy core libraries folder to the current build folder -->
+    	<copy todir="${dir.build.current}/lib">
+    		<fileset dir="${dir.src}/lib/core"/>
+    	</copy>
+    	
+    	<!-- Copy the index.html and replace appropriate tokens in it -->
+        <copy file="${dir.src}/index.html" tofile="${dir.build.current}/index.html" overwrite="true">
+        	<filterset>
+    	      <filter token="version" value="${timestamp}"/>
+    	      <filter token="timestamp" value="${timestamp}"/>
+    	      <filter token="user.name" value="${user.name}"/>
+    	      <filter token="app.js" value="${file.name.app.minified}"/>
+    	      <filter token="lib.js" value='&lt;script type="text/javascript" src="${file.name.lib.minified}"&gt;&lt;/script&gt;${line.separator}${line.separator}'/>
+    	    </filterset>
+        </copy>
+    	
+    	<copy file="${dir.src}/no-ie-message.html" tofile="${dir.build.current}/no-ie-message.html" overwrite="true" />
+    	
+    	<!-- Delete consolidated files -->
+    	<delete file="${dir.build.current}/${file.name.app.consolidated}" />
+    	<delete file="${dir.build.current}/${file.name.lib.consolidated}" />
+    	
+    	
+    	<!-- Start fresh. Delete the current bin folder -->
+    	<delete dir="${dir.bin}" />
+    	
+    	<!-- Now move the current build to the bin folder (the folder will be created in "move" task) -->
+        <move file="${dir.build.current}" tofile="${dir.bin}"/>
+    	
+        <echo>Finished. The bin folder is ready to be deployed.</echo>
+    </target>
+	
+	
+	
+	<target name="set-dev-database">
+		<replace file="${file.path.app.consolidated}" token="@environment@" value="local" />
+	</target>
+	<target name="set-prod-database">
+		<replace file="${file.path.app.consolidated}" token="@environment@" value="prod" />
+	</target>
+	
+	
+	
+
+
+	
+	
+	<!-- DEBUG BUILD -->
+	<target name="build-debug"
+		depends="
+    		version-current, 
+    		properties, 
+    		create_build, 
+    		consolidate,
+    		insert-lib-script-tags,
+    		finish,
+    		set-dev-database,
+    		create_bin" />
+	
+	<!-- PRODUCTION BUILD (minified) -->
+    <target name="build-production" 
+    	depends="
+    		version, 
+    		properties, 
+    		create_build, 
+    		jshint, 
+    		consolidate, 
+    		set-prod-database,
+    		minify,
+    		consolidate-lib, 
+    		minify-lib,
+    		finish-build">
+    </target>
+	
+	
+	
+	
+	
+    <!-- DEBUG DEV-->
+    <target name="debug-dev" 
+    	depends="
+    		version-current, 
+    		properties, 
+    		create_build, 
+    		consolidate,
+    		insert-lib-script-tags,
+    		finish,
+    		set-dev-database,
+    		create_bin">
+    	
+    	<delete dir="${deploy.folder.dev}"/>
+    	
+    	<copy todir="${deploy.folder.dev}">
+    		<fileset dir="${dir.bin}"/>
+    	</copy>
+    	
+    </target>
+	
+	<!-- DEBUG DEV QUICK -->
+    <target name="debug-quick" 
+    	depends="
+    		version-current, 
+    		properties, 
+    		create_build, 
+    		consolidate,
+    		copy-my-css,
+    		set-dev-database,
+    		create_bin">
+    	
+    	<copy todir="${deploy.folder.dev}">
+    		<fileset dir="${dir.bin}"/>
+    	</copy>
+    	
+    </target>
+	
+
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	<!-- Auto Check with JSHint upon file save -->
+  	<target name="auto-jshint">
+  		<property file="build.properties"/>
+  		<timestampselector property="latest.modified">
+  		  <path>
+  		  	<fileset id="jsFileList" dir="${dir.src}/app" includes="**/*.js"/>
+  		  </path>
+  		</timestampselector>
+        <echo>Checking syntax of ${latest.modified}...</echo>
+      	<exec executable="${file.phantomjs}" failonerror="true">
+          <arg line="'${file.jshint-runner.js}'" />
+          <arg line="'${file.jshint.js}'" />
+          <arg line="'${latest.modified}'" />
+      	</exec>
+        <echo>Finished. No errors found.</echo>
+  	</target>
+	
+	<target name="create-lib-script-tags">
+		<property file="build.properties"/>
+		<echo file="${file.lib-script-tags}" append="false" />
+		<foreach target="loop" param="loop.param">
+			<path>
+				<fileset 
+				    dir="${dir.src}/lib"
+				    includes="*.js"/>
+			</path>
+		</foreach>
+	</target>
+	
+	<target name="loop">
+		<property file="build.properties"/>
+		<basename property="file.name" file="${loop.param}"/>
+		<echo file="${file.lib-script-tags}" append="true">&lt;script type="text/javascript" src="lib/${file.name}"&gt;&lt;/script&gt;${line.separator}&#9;</echo>
+	</target>
+	
+</project>
+
