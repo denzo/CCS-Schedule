@@ -27,7 +27,7 @@
 	{{#if suggestions.length}}
 		{{#each suggestions}}
 			<li><button {{action 'addRequest' this}}>Select</button>
-				{{analyst}} - {{shortDate option.firstObject.date}}
+				{{analyst}} - {{shortDate start}}
 				{{#if replace}}
 					<small style="color:red;">Replace: {{replace.title}}</small>
 				{{/if}}

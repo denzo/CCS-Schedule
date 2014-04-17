@@ -1,5 +1,7 @@
 App.ApplicationController = Em.ArrayController.extend({
 
+	printDetails: false,
+
 	dataView: null,
 	
 	contentObserver: function() {
@@ -156,24 +158,33 @@ App.ApplicationController = Em.ArrayController.extend({
 	
 	},
 	
-	createEmptyOptions: function(totalDays, newRequestDuration) {
-		
-		var today = Date.today();
-	
-		return d3.range(totalDays).map(function(offset) {
-		
-			offset = today.clone().addDays(offset);
-		
-			return d3.range(newRequestDuration).map(function(d) { 
+	/**
+	* This method creates all available empty options. An "option" is an array of dates
+	* with associated load (number of tasks on the same day mean "load") against it.
+	* "Option" has a length of the provided duration. 
+	*
+	*      Due
+	*       |
+	* xxxoooooo = [1,2,3]
+	* oxxxooooo = [2,3,4]
+	* ooxxxoooo = [3,4,5]
+	* oooxxxooo = [4,5,6]
+	* ooooxxxoo = [5,6,7]
+	*
+	* You can see that we created 5 possible options.
+	* 
+	*/
+	createEmptyOptions: function(from, to, duration) {
+		return this.createDateRange(from, to).map(function(date) {
+			return d3.range(duration).map(function(i) { 
 				return {
-					date: offset.clone().addDays(d),
+					date: date.clone().addDays(i),
 					load: 0
 				};
 			})
-		
 		});
-	
 	},
+	
 	
 	createEmptySlots: function(from, to, portfolio) {
 	
@@ -190,37 +201,49 @@ App.ApplicationController = Em.ArrayController.extend({
 	},
 	
 	
+	/**
+	* Creates an Array of dates for the specified range.
+	*
+	* @param {Date} from A from date for the range.
+	* @param {Date} to A to date for the range
+	*
+	* @returns {Array.<Date>} An array of dates for the specified range. 
+	*/
 	createDateRange: function(from, to) {
-	
 		return d3.range(App.Utils.daysDiff(from, to)).map(function(offset) {
-		
 			return from.clone().addDays(offset);
-		
 		});
-	
 	},
 	
 	
-	getSuggestionsForGroup: function(group, newRequest, eliminate) {
+	/**
+	* This method will find the best suggestion for the provided group.
+	* Please note that this method is recursive.
+	*
+	* @param {Group} group SlickGrid's Group object (https://github.com/mleibman/SlickGrid/wiki/DataView).
+	* @param {Date} due Due date of the new request.
+	* @param {Date} duration Duration (in days) of the new request.
+	* @param {Number} eliminate Index of the item to exclude in the group.
+	*
+	* @returns {Object} An object containing the best option in the group.
+	*	{
+	*		start: {Date},
+	*		replace: {Request}
+	*	} 
+	*/
+	findSuggestionsForGroup: function(current, due, duration, eliminate) {
 		var self = this,
-			printDetails = false,
+			maxLoad = 3,
+			maxLoadTolerance = 2, 
+			printDetails = self.get('printDetails'),
 			today = Date.today(),
-			totalDays = App.Utils.daysDiff(Date.today(), newRequest.due.clone().addDays(-newRequest.duration)),
-			options = self.createEmptyOptions(totalDays, newRequest.duration),
-			groupRows = group.rows; 
-		
+			options = self.createEmptyOptions(today, due.clone().addDays(-duration), duration);
 		
 		if (!Em.isNone(eliminate)) {
-		
-			if (printDetails) {
-				console.log('ELIMINATE --> ' + eliminate);
-			}
-			
 			// sort by score so the first replace option is a request with the lowest score
-			groupRows = groupRows.slice(0).sort(function(a, b) { return d3.ascending(a.score, b.score) || d3.descending(a.due, b.due); });
-		
+			groupRows = current.slice(0).sort(function(a, b) { return d3.ascending(a.score, b.score) || d3.descending(a.due, b.due); });
+			if (printDetails) console.log('ELIMINATE --> ' + eliminate);
 		}
-		
 		
 		options.forEach(function(option) {
 		
@@ -229,7 +252,7 @@ App.ApplicationController = Em.ArrayController.extend({
 				// this is a load for the new request
 				day.load++;
 				
-				groupRows.forEach(function(row, i) {
+				current.forEach(function(row, i) {
 					
 					if (eliminate !== i) {
 					
@@ -246,80 +269,61 @@ App.ApplicationController = Em.ArrayController.extend({
 		
 		
 		if (printDetails) {
-			console.log('-----------------------------');
 			console.log('with overload, total: ' + options.length);
+			self.printResult(options, printDetails);
 		}
 		
-		self.printResult(options, printDetails);
 		
-		
-		// ----------------------------------------------------------------
-		//
-		// without overload
-		//
-		// ----------------------------------------------------------------
-		
-		
+		// filter out options that have 3 or more days
 		options = options.filter(function(option) {
-		
-			return option.filter(function(day) { return day.load > 2; }).length < 3;	
-		
+			return option.filter(function(day) { return day.load >= maxLoad; }).length <= maxLoadTolerance;
 		});
 		
 		if (printDetails) {
-			console.log('-----------------------------');
 			console.log('without overload, total: ' + options.length);
+			self.printResult(options, printDetails);
 		}
 		
-		self.printResult(options, printDetails);
 		
-		
-		// ----------------------------------------------------------------
-		//
 		// if no options are found we are going to try to suggest a
 		// request with less value to be replaced.
-		//
-		// ----------------------------------------------------------------
-		
-		
 		if (options.length === 0) {
 			
 			eliminate = Em.isNone(eliminate) ? 0 : ++eliminate;
 			
-			if (eliminate < group.rows.length) {
-		
-				return self.getSuggestionsForGroup(group, newRequest, eliminate);
-				
+			if (eliminate < current.length) {
+				return self.findSuggestionsForGroup(current, due, duration, eliminate);
 			} else {
-			
 				return null;
-			
 			}
+		} 
 		
-		} else {
+		else if (options.length > 0) {
 		
-			var results = options.map(function(option) {
+			var allOptions = options.map(function(option) {
+			
 				var speed = App.Utils.daysDiff(today, option[0].date),
 					load = d3.sum(option.getEach('load')),
 					score = speed + load;
 			
 				return {
-				
-					analyst: group.value,
 					option: option,
 					speed: speed,
 					load: load,
 					score: speed + load,
-					replace: groupRows[eliminate]
-				
+					replace: current[eliminate]
 				}
 			
-			}).sort(function(a, b) { return d3.ascending(a.score, b.score) || d3.ascending(a.speed, b.speed); });
-		
-			return results[0];
+			})
+			.sort(function(a, b) { return d3.ascending(a.score, b.score) || d3.ascending(a.speed, b.speed); });
 			
+			var bestOption = allOptions[0]; // return the best (first after sorting) option
+			
+			return {
+				start: bestOption.option[0].date,
+				replace: bestOption.replace
+			}
 		}
-			
 	},
 	
 	
@@ -419,34 +423,33 @@ App.ApplicationController = Em.ArrayController.extend({
 		var self = this,
 			results = [],
 			originalDueDate = newRequest.get('due').clone();
-		
 				
 		groups.forEach(function(group) {
-			
 			var groupSuggestion = null;
 			
 			while (!(groupSuggestion && groupSuggestion.replace === undefined)) {
-				groupSuggestion = self.getSuggestionsForGroup(group, newRequest);
+				groupSuggestion = self.findSuggestionsForGroup(group.rows, newRequest.due, newRequest.duration);
 				newRequest.get('due').addDays(1);
 			}
+			
+			groupSuggestion.analyst = group.value;
 			
 			results.push(groupSuggestion);
 			
 			newRequest.set('due', originalDueDate.clone());
 		});
 		
-		// sort by the sooner start date
-		var result = results.sort(function(a, b) { return d3.ascending(a.option[0].date, b.option[0].date); }).shift();
+		// sort by the sooner start date and get the first option
+		var result = results.sort(function(a, b) { return d3.ascending(a.start, b.start); })[0];
 		
-		var newDue = result.option[0].date.clone().addDays(newRequest.duration);
+		var newDue = result.start.clone().addDays(newRequest.duration);
 		
 		return {
 			originalDue: originalDueDate,
 			newDue: newDue, // mega important
 			analyst: result.analyst,
 			diff: App.Utils.daysDiff(originalDueDate, newDue),
-			start: result.option[0].date,
-			option: result.option
+			start: result.start
 		};
 	
 	},
@@ -463,12 +466,11 @@ App.ApplicationController = Em.ArrayController.extend({
 				newRequest = self.get('request');
 			
 			newRequest.analyst = suggestion.analyst;
-			newRequest.start = suggestion.option[0].date;
+			newRequest.start = suggestion.start;
 			newRequest.end = newRequest.start.clone().addDays(newRequest.duration);
 			
 			self.addObject(newRequest);
 			self.send('randomize');
-		
 		},
 	
 		addRequestWithDelay: function(suggestion) {
@@ -476,14 +478,12 @@ App.ApplicationController = Em.ArrayController.extend({
 				newRequest = self.get('request');
 			
 			newRequest.analyst = suggestion.analyst;
-			newRequest.start = suggestion.option[0].date;
+			newRequest.start = suggestion.start;
 			newRequest.end = newRequest.start.clone().addDays(newRequest.duration);
 			
 			self.addObject(newRequest);
 			self.send('randomize');
-		
 		},
-	
 		
 		getSuggestions: function(newRequest) {
 			var self = this,
@@ -496,9 +496,14 @@ App.ApplicationController = Em.ArrayController.extend({
 			groups.forEach(function(group) {
 				console.log('-----------------------------');
 				console.debug('Looking through: ' + group.value);
-				console.log('-----------------------------');
 			
-				results.push(self.getSuggestionsForGroup(group, newRequest));
+				var groupBestSuggestion = self.findSuggestionsForGroup(group.rows, newRequest.due, newRequest.duration);
+				
+				if (groupBestSuggestion) {
+					groupBestSuggestion.analyst = group.value;
+					results.push(groupBestSuggestion);
+				}
+			
 			
 			});
 			
@@ -516,33 +521,10 @@ App.ApplicationController = Em.ArrayController.extend({
 					return d3.ascending(Boolean(a.replace), Boolean(b.replace)) || 
 						(Boolean(a.replace) ?
 							d3.ascending(a.replace.score, b.replace.score) :
-							d3.ascending(a.option[0].date, b.option[0].date));
+							d3.ascending(a.start, b.start));
 				});
 			
-				results.forEach(function(result) {
-					
-					/* Result object:
-					
-					analyst: group.value,
-					option: option,
-					speed: speed,
-					load: load,
-					score: speed + load,
-					replace: group.rows[eliminate]
-					
-					*/
-					
-					self.set('suggestions', results);
-					
-					
-					console.debug(
-						'Analyst: ' + result.analyst,
-						' | Best start date: ' + result.option[0].date.toString('dd MMM'),
-						result.replace ? (' | Replace: ' + result.replace.title) : '',
-						result.replace ? (' | Score: ' + result.replace.score) : '');
-					console.log('-----------------------------');
-				});
-				
+				self.set('suggestions', results);
 				
 				// if all the results suggest a replacement we will find a suggestion
 				// where we move the due date to later
