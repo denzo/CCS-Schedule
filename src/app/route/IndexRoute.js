@@ -1,4 +1,4 @@
-App.ApplicationRoute = Em.Route.extend({
+App.IndexRoute = Em.Route.extend({
 
 	model: function() {
 		var self = this;
