@@ -1,4 +1,4 @@
-App.ApplicationController = Em.ArrayController.extend({
+App.IndexController = Em.ArrayController.extend({
 
 	printDetails: false,
 
@@ -390,6 +390,9 @@ App.ApplicationController = Em.ArrayController.extend({
 	delayed: null,
 	
 	
+	/**
+	* Generates a set of fake campaigns.
+	*/
 	campaigns: function(total) {
 	
 		var self = this,

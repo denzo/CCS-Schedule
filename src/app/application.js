@@ -3,9 +3,10 @@ App = Em.Application.create();
 App.deferReadiness();
 
 App.Router.map(function() {
-	// this.route('boom');
-});
 
-App.IndexRoute = Em.Route.extend({
-
+	this.resource('submit', function() {
+		this.route('campaign');
+		this.route('project');
+	});
+	
 });
