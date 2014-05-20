@@ -7,7 +7,7 @@ App.LoadRenderer = {
 			maxWidth = width,
 			maxHeight = height,
 			dayWidth = width / data.length,
-			now = from || Date.today();
+			now = Date.today();
 		
 		var svg = d3.select(container).append('svg')
 			.attr('class', 'load-vis')
