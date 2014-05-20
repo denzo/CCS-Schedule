@@ -1,24 +1,54 @@
 App.ApplicationRoute = Em.Route.extend({
 
-	model: function() {
-		var self = this;
-	
-		return App.Campaign.fetch().then(function() {
-			return self.fake(5);
+	afterModel: function(params) {
+		var self = this,
+			appController = self.controllerFor('application');
+		
+		return Em.RSVP.all([
+			App.Campaign.fetch(),
+			App.Preanalysis.fetch(),
+			App.Channel.fetch()
+		]).then(function(results) {
+			return new Ember.RSVP.Promise(function(resolve, reject) {
+				d3.csv('data/ltv_matrix.csv', function(csv) {
+					resolve(csv.map(function(item) {
+						return {
+							portfolio: item.Portfolio,
+							product: item.Product,
+							objectives: Em.keys(item).without('Portfolio').without('Product').filter(function(objective) { return item[objective] !== 'na'; })
+						};
+					}));
+				});
+			});
+		}).then(function(products) {
+			appController.set('campaigns', App.Campaign.find());
+			appController.set('products', products);
+			appController.set('tasks', self.fake(5));
 		});
 	},
+	
 	
 	setupController: function(controller, model) {
 		this._super(controller, model);
 		
-		var self = this;
+		var self = this,
+			today = Date.today(),
+			from = controller.get('from'),
+			to = today.clone().moveToDayOfWeek(0).addWeeks(7);
+		
+		
+		
+		
 		
 		var groupItemMetadataProvider = new Slick.Data.GroupItemMetadataProvider(),
 			dataView = new Slick.Data.DataView({groupItemMetadataProvider: groupItemMetadataProvider});
 			
-		dataView.setGrouping([{getter: 'analyst'}]);
+		controller.set('dataView', dataView);
+		controller.set('groupItemMetadataProvider', groupItemMetadataProvider);
+		
+		dataView.setGrouping([controller.get('groups').findBy('field', 'assignee')]);
 		dataView.beginUpdate();
-        dataView.setItems(model);
+        dataView.setItems(controller.get('tasks'));
 		dataView.setFilter(function(item, args) {
 			if (!args) return true;
 			
@@ -37,7 +67,7 @@ App.ApplicationRoute = Em.Route.extend({
         dataView.endUpdate();
         
 		var analyst = function(a, b) {
-			return  d3.ascending(a.analyst, b.analyst);
+			return d3.ascending(a.analyst, b.analyst);
 		}
 	
 		var start = function(a, b) {
@@ -54,22 +84,7 @@ App.ApplicationRoute = Em.Route.extend({
 	
 		dataView.sort(comparer);
 		
-		today = Date.today(),
-		from = today.getDay() === 1 ? today.clone() : today.clone().moveToDayOfWeek(1, -1),
-		to = today.clone().moveToDayOfWeek(0).addWeeks(7);
-		
-		controller.set('dataView', dataView);
-		controller.set('groupItemMetadataProvider', groupItemMetadataProvider);
-		
-		controller.set('range', [from, to]);
-		
-		controller.set('portfolios', self.get('portfolios'));
-		controller.set('types', self.get('types'));
-		controller.set('objectives', self.get('objectives'));
-		
-		
-		controller.set('campaignList', App.Campaign.find());
-		
+		//controller.set('range', [from, to]);
 		
 	},
 	
@@ -82,78 +97,29 @@ App.ApplicationRoute = Em.Route.extend({
 	},
 	
 	
-	portfolios: function() {
-		return ['Credit Cards', 'Home Loans', 'Forex', 'Personal Loans', 'Business'];
-	}.property(),
-	
-	
-	objectives: function() {
-		return ['Acquisition', 'Compliance', 'Service', 'Retention', 'Usage'];
-	}.property(),
-	
-	
-	types: function() {
-		return ['Pre-analysis', 'Development', 'PIR', 'Misc'];
-	}.property(),
-	
-	
-	
-	
-	campaigns: function(total) {
-	
-		var self = this,
-			i = -1,
-			result = [];
-			
-		while (++i < total) {
-		
-			result.push({
-			
-				title: '1000' + App.Utils.pad(i, 2),
-				portfolio: App.Random.select(self.get('portfolios')),
-				objective: App.Random.select(self.get('objectives'))
-			
-			});
-		
-		}
-		
-		return result;
-	
-	},
-	
-	analysts: function() {
-		var all = ['Benjamin Zhan', 'Vicki Wood', 'Deniss Alimovs', 'Nancy Macolino', 'Maurice Ky', 'Lilly Truong', 'Gustavo Lummertz', 'Andrew Down', 'Helen Chau', 'Deepti Bellavi', 'Peter Gebhardt', 'Louis Tranquille', 'Ying Guang'];
-		//var all = ['Benjamin Zhan'],
-		//var all = ['Benjamin Zhan', 'Vicki Wood', 'Deniss Alimovs'];
-		
-		return all;
-	}.property(),
-
-
 	fake: function(total) {
 		var self = this,
+			controller = self.controllerFor('application'),
 			i = -1,
 			now = Date.today(),
-			campaigns = self.campaigns(50),
-			analysts = self.get('analysts'),
-			types = self.get('types'),
+			campaigns = controller.get('campaigns'),
+			analysts = controller.get('analysts'),
+			types = controller.get('types'),
 			result = [];
 			
 		while (++i < total) {
-			var campaign = App.Random.select(campaigns),
+			var campaign = App.Random.select(campaigns.get('content')),
 				created = now.clone().addDays(App.Random.within(-30, 0)),
 				start = created.clone().addDays(App.Random.within(0, 30)),
 				end = start.clone().addDays(App.Random.within(5, 20)),
 				due = end.clone().addDays(App.Random.within(1, 15)),
 				dueWeek = due.clone().getDay() === 1 ? due.clone() : due.clone().moveToDayOfWeek(1, -1);
 			
-			result.push(Em.Object.create({
+			result.push(App.Task.create({
 				id: i,
 				type: App.Random.select(types),
-				title: campaign.title,
-				portfolio: campaign.portfolio,
-				objective: campaign.objective,
-				analyst: App.Random.select(analysts),
+				campaign: campaign,
+				assignee: App.Random.select(analysts),
 				created: created,
 				start: start,
 				end: end,
@@ -171,7 +137,7 @@ App.ApplicationRoute = Em.Route.extend({
 		restart: function(total) {
 			var self = this;
 			
-			self.set('controller.content', self.fake(App.Utils.Number(total) || 10));
+			//self.set('controller.content', self.fake(App.Utils.Number(total) || 10));
 			
 		}
 	

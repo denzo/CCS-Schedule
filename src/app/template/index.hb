@@ -8,9 +8,10 @@
 		</div>
 		<div class="interface">
 			Group by: 
-			<button {{action 'groupByAnalyst'}}>Analyst</button>
-			<button {{action 'groupBy' 'portfolio'}}>Portfolio</button>
-			<button {{action 'groupBy' 'title'}}>Campaign</button>
+			<button {{action 'groupBy' 'assignee'}}>Analyst</button>
+			<button {{action 'groupBy' 'campaign.portfolio'}}>Portfolio</button>
+			<button {{action 'groupBy' 'campaign.title'}}>Campaign</button>
+			<button {{action 'groupBy' 'type'}}>Type</button>
 		</div>
 		<div style="padding: 10px;margin-top:-15px;display:inline-block;">{{#each typeTotals}}{{type}}: {{slots}}, {{/each}}</div>
 	</div>

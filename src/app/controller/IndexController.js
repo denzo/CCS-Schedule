@@ -1,58 +1,21 @@
-App.ApplicationController = Em.ArrayController.extend({
+App.IndexController = Em.ArrayController.extend({
+
+	needs: ['application'],
 
 	printDetails: false,
 
-	dataView: null,
+	dataView: Em.computed.alias('controllers.application.dataView'),
+	range: Em.computed.alias('controllers.application.range'),
+	from: Em.computed.alias('controllers.application.from'),
+	to: Em.computed.alias('controllers.application.to'),
+	future: Em.computed.alias('controllers.application.future'),
+	duration: Em.computed.alias('controllers.application.duration'),
+	groups: Em.computed.alias('controllers.application.groups'),
 	
-	contentObserver: function() {
-		var self = this,
-			model = self.get('content'),
-			dataView = self.get('dataView');
-		
-		if (!dataView) return;
-		
-		dataView.beginUpdate();
-        dataView.setItems(model);
-        dataView.endUpdate();
+	groupItemMetadataProvider: Em.computed.alias('controllers.application.groupItemMetadataProvider'),
 	
-	}.observes('length'),
-	
-	range: null,
-	from: null,
-	to: null,
-	future: 7,
-	
-	portfolios: null,
 	
 	request: null,
-	
-	rangeObserver: function() {
-		var self = this,
-			dataView = self.get('dataView'),
-			range = self.get('range'),
-			from = range[0],
-			to = range[1];
-		
-		dataView.setFilterArgs({
-			range: range
-		});
-		
-		dataView.refresh();
-		//dataView.sort();
-		
-		
-		self.set('from', from);
-		self.set('to', to);
-	
-	}.observes('range'),
-	
-	/**
-	* {Number} A total number of weeks within the range.
-	*/
-	duration: function() {
-		var self = this;
-		return Math.round((self.get('to').getTime() - self.get('from').getTime()) / 1000 / 60 / 60 / 24 / 7); 
-	}.property('from', 'to'),
 	
 	
 	/**
@@ -71,13 +34,13 @@ App.ApplicationController = Em.ArrayController.extend({
 		{
 			name: 'Title',
 			id: 'title',
-			field: 'title',
+			field: 'campaign.title',
 			cssClass: 'indent'
 		},
 		{
 			name: 'Portfolio',
 			id: 'portfolio',
-			field: 'portfolio'
+			field: 'campaign.portfolio'
 		},
 		{
 			name: 'Type', 
@@ -129,10 +92,6 @@ App.ApplicationController = Em.ArrayController.extend({
 		}
 		];
 	}.property(),
-	
-	
-	
-	
 	
 	
 	
@@ -343,83 +302,15 @@ App.ApplicationController = Em.ArrayController.extend({
 	
 	
 	
-	portfolioTotals: function() {
-		var self = this,
-			from = self.get('from'),
-			to = self.get('to'),
-			all = self.get('dataView').getItems();
-			
-		return self.get('portfolios').map(function(portfolio) {
-		
-			var requestsOfType = all.filterBy('portfolio', portfolio);
-		
-			return {
-				portfolio: portfolio,
-				total: requestsOfType.length,
-				slots: self.calculateUsedSlots(requestsOfType, from, to)
-			}
-		
-		});
-		
-	}.property('to', 'from', 'length'),
 	
 	
 	
-	typeTotals: function() {
-		var self = this,
-			from = self.get('from'),
-			to = self.get('to'),
-			all = self.get('dataView').getItems();
-			
-		return self.get('types').map(function(type) {
-		
-			var requestsOfType = all.filterBy('type', type);
-		
-			return {
-				type: type,
-				total: requestsOfType.length,
-				slots: self.calculateUsedSlots(requestsOfType, from, to)
-			}
-		
-		});
-		
-	}.property('to', 'from'),
+	
+
 	
 	
 	suggestions: null,
 	delayed: null,
-	
-	
-	/**
-	* Generates a set of fake campaigns.
-	*/
-	campaigns: function(total) {
-	
-		var self = this,
-			i = -1,
-			total = total || 100,
-			result = [];
-			
-		while (++i < total) {
-		
-			result.push({
-			
-				title: '1000' + App.Utils.pad(i, 2),
-				portfolio: App.Random.select(self.get('portfolios')),
-				objective: App.Random.select(self.get('objectives'))
-			
-			});
-		
-		}
-		
-		return result;
-	
-	},
-	
-	
-	
-	
-	
 	
 	
 	findDelayedSuggestion: function(newRequest, groups) {
@@ -558,13 +449,12 @@ App.ApplicationController = Em.ArrayController.extend({
 			this.get('dataView').expandAllGroups();
 		},
 		
-		groupBy: function(columns) {
+		groupBy: function(fields) {
 			var self = this,
-				dataView = self.get('dataView');
-				
-			
+				dataView = self.get('dataView'),
+				groups = self.get('groups');
 				 
-			dataView.setGrouping(columns.split(',').map(function(column) { return {getter: column}; }));
+			dataView.setGrouping(fields.split(',').map(function(field) { return groups.findBy('field', field); }));
 			
 			var dueWeek = function(a, b) {
 				return d3.ascending(d3.time.monday(a.end), d3.time.monday(b.end));
@@ -590,7 +480,9 @@ App.ApplicationController = Em.ArrayController.extend({
 				dataView = self.get('dataView');
 				
 			dataView.setGrouping({
-				getter: 'analyst',
+				getter: function(d) {
+					return d.get('assignee');
+				},
 				formatter: function(group) {
 				
 					var i = -1,
