@@ -34,7 +34,13 @@ App.DynamicSlickGridComponent = Em.View.extend({
 			enableCellNavigation: false,
 			enableColumnReorder: false,
 			enableAsyncPostRender: true,
-			asyncPostRenderDelay: 0
+			asyncPostRenderDelay: 0,
+			
+			// this is a default formatter to be used with Ember objects
+			// uses get method as oppose to POJOs dot notation
+			defaultFormatter: function(row, cell, value, column, data) {
+				return data.get(column.field);
+			},
 		};
 	}.property(),
 	
