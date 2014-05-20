@@ -33,7 +33,8 @@ App.LaneRenderer = {
 				.attr('y', '5px')
 				.attr('opacity', '0')
 				.style('text-anchor', null);
-			
+		
+		/*	
 		var due = svg.selectAll('line .due')
 			.data([data]);
 
@@ -51,6 +52,7 @@ App.LaneRenderer = {
 			.attr('class', 'due');
 
 		due.exit().remove();
+		*/
 		
 		var duration = svg.selectAll('rect .duration')
 			.data([data]);
