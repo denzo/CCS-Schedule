@@ -76,7 +76,7 @@ App.SubmitRoute = Em.Route.extend({
 	* @param {Date} duration Duration (in days) of the new request.
 	* @param {Number} eliminate Index of the item to exclude in the currently assigned tasks. As this method is recursive this index will keep increasing.
 	*
-	* @returns {App.BestSuggestion} An object containing the best option in the group.
+	* @returns {App.SuggestionOption}
 	*/
 	findSuggestionsForGroup: function(current, due, duration, eliminate) {
 		var self = this,
@@ -162,7 +162,7 @@ App.SubmitRoute = Em.Route.extend({
 		else if (options.length > 0) {
 		
 			// sort on score (lower better) then speed (lower better)
-			options.sort(function(a, b) { return d3.ascending(a.score, b.score) || d3.ascending(a.speed, b.speed); });
+			options.sort(function(a, b) { return d3.ascending(a.get('score'), b.get('score')) || d3.ascending(a.get('speed'), b.get('speed')); });
 			
 			var bestOption = options[0]; // return the best (first after sorting) option
 			
@@ -191,7 +191,7 @@ App.SubmitRoute = Em.Route.extend({
 				tasksGroupedByAssignee = self.controllerFor('assignees'); //tasks.get('groupedByAssignee');
 			
 			tasksGroupedByAssignee.forEach(function(group) {
-				var groupBestSuggestion = self.findSuggestionsForGroup(group.get('tasks.content'), task.get('dueDate'), task.get('duration'));
+				var groupBestSuggestion = self.findSuggestionsForGroup(group.get('futureTasks'), task.get('dueDate'), task.get('duration'));
 				
 				if (groupBestSuggestion) {
 					groupBestSuggestion.analyst = group.value;
