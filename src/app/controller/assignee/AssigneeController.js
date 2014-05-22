@@ -5,11 +5,20 @@ App.AssigneeController = Em.ObjectController.extend({
 	assignee: null,
 	
 	tasks: function() {
-		return Em.ArrayController.create({
-			content: this.get('all').filterBy('assignee', this.get('assignee')),
-			itemController: 'task'
+		return this.get('all').filterBy('assignee', this.get('assignee'));
+	}.property('assignee', 'all.@each.assignee'),
+	
+	/**
+	* A list of assigned tasks that are scheduled from today onwards.
+	*/
+	futureTasks: function() {
+		var self = this,
+			tasks = self.get('tasks'),
+			today = Date.today();
+		return tasks.filter(function(task) {
+			return task.get('start').isAfter(today) || task.get('end').isAfter(today);
 		});
-	}.property('assignee', 'all.@each.assignee')
+	}.property('tasks.@each.start', 'tasks.@each.end')
 
 });
 
