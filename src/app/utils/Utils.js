@@ -63,6 +63,9 @@ App.Utils.reopenClass({
 		return (value && value instanceof Date) ? value.toString('d-MMM-yyyy') : null;
     },
     
+    /**
+    * date2 is later than date1
+    */
     daysDiff: function(date1, date2) {
 		if (date1 instanceof Date !== true || date2 instanceof Date !== true) return 0;
     
