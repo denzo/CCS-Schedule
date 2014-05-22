@@ -1243,7 +1243,7 @@ App.Task = Em.Model.extend({
 	/**
 	* {String} Task type.
 	*/
-	type: Em.attr(),
+	category: Em.attr(),
 	
 	
 	/**
@@ -1255,19 +1255,19 @@ App.Task = Em.Model.extend({
 	/**
 	* {Date} Intended start date of the task.
 	*/
-	startDate: Em.attr(App.SharePointTypes.Date),
+	start: Em.attr(App.SharePointTypes.Date),
 	
 	
 	/**
 	* {Date} Intended end date of the task.
 	*/
-	endDate: Em.attr(App.SharePointTypes.Date),
+	end: Em.attr(App.SharePointTypes.Date),
 	
 	
 	/**
 	* {Date} The requested due date.
 	*/
-	dueDate: Em.attr(App.SharePointTypes.Date)
+	due: Em.attr(App.SharePointTypes.Date)
 	
 });
 
@@ -1338,6 +1338,90 @@ App.Project.primaryKey = 'ID';
 App.Project.url = '@environment@-project';
 App.Project.fixture = 'data/fixtures/project.xml';
 App.Project.adapter = '@environment@' === 'local' ? App.FakeAdapter.create() : App.SPAdapter.create();
+
+
+
+
+
+
+
+
+
+
+
+App.SuggestionOption = Em.ArrayController.extend({
+	
+	/**
+	* {Date} From date.
+	*/
+	from: function() {
+		return this.get('firstObject.date');
+	}.property('firstObject.date'),
+	
+	/**
+	* {Number} Duration in days.
+	*/
+	duration: Em.computed.alias('length'),
+	
+	/**
+	* {Array.<DayLoad>}
+	*/
+	content: [],
+	
+	totalLoad: function() {
+		return this.reduce(function(previousValue, item) {
+			return previousValue + item.get('load');
+		}, 0);
+	}.property('@each.load'),
+	
+	start: function() {
+		return this.get('firstObject.date');
+	}.property('firstObject.date'),
+
+	end: function() {
+		return this.get('lastObject.date');
+	}.property('lastObject.date'),
+	
+	speed: function() {
+		return App.Utils.daysDiff(Date.today(), this.get('start'));
+	}.property('start'),
+	
+	score: function() {
+		return this.get('speed') + this.get('totalLoad');
+	}.property('speed', 'totalLoad'),
+	
+	/**
+	* {App.Task} A task that is suggested to be replaced.
+	*/
+	replace: null
+	
+});
+
+App.DayLoad = Em.Object.extend({
+
+	/**
+	* {Date} Suggested start date
+	*/
+	date: null,
+	
+	
+	/**
+	* {Number} A number of tasks on the day (refer to 'date' property).
+	*/
+	load: null,
+	
+	
+	/**
+	* A helper method that will increase the load by one
+	*/
+	increase: function() {
+		var self = this,
+			load = self.get('load') || 0;
+			
+		self.set('load', load + 1);
+	}
+
+});
 
 
 

@@ -1,5 +1,11 @@
 <script data-template-name="index" type="text/x-handlebars">
 	{{link-to 'Add task' 'submit' class="btn btn-primary"}}
+	<button class="btn btn-primary btn-save" {{action addFake}}>Add fake</button>
+	<div>
+	{{#each assignee in assignees}}
+		{{assignee.assignee}} ({{tasks.length}}) | 
+	{{/each}}
+	</div>
 	<h1>CCS Schedule {{scheduleDate from}} &mdash; {{scheduleDate to}} ({{duration}} {{durationsLabel}})</h1>
 	<div>
 		<div class="interface">

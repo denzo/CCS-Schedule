@@ -1,6 +1,5 @@
 App.SubmitCampaignView = Em.View.extend({
 
-
 	campaignListObserver: function() {
 		var self = this,
 			searchable = self.get('controller.searchable');
@@ -12,7 +11,5 @@ App.SubmitCampaignView = Em.View.extend({
 			}
 		});
 	}.on('didInsertElement')
-	
-
 
 });

@@ -1,12 +1,16 @@
 App.ApplicationController = Em.ObjectController.extend({
 
+	needs: ['tasks'],
+	
+	fakePool: null,
+
 
 	/**
 	* {Array.<App.Task>} A list of all tasks.
 	*/
-	tasks: null,
-
-
+	tasks: Em.computed.alias('controllers.tasks'),
+	
+	
 	/**
 	* {Array.<App.Campaign>} A list of all campaigns.
 	*/
@@ -92,7 +96,7 @@ App.ApplicationController = Em.ObjectController.extend({
 							
 							// console.log(d.date.toString('d MMM'), row.start.toString('d MMM'), row.end.toString('d MMM'), d.date.between(row.start, row.end));
 							
-							if (d.date.between(row.start, row.end.clone().addDays(-1))) // note -1 day
+							if (d.date.between(row.get('start'), row.get('end').clone().addDays(-1))) // note -1 day
 								d.load++;
 							
 						});
@@ -218,34 +222,6 @@ App.ApplicationController = Em.ObjectController.extend({
 	
 	},
 	
-	/**
-	* This method creates all available empty options. An "option" is an array of dates
-	* with associated load (number of tasks on the same day mean "load") against it.
-	* "Option" has a length of the provided duration. 
-	*
-	*      Due
-	*       |
-	* xxxoooooo = [1,2,3]
-	* oxxxooooo = [2,3,4]
-	* ooxxxoooo = [3,4,5]
-	* oooxxxooo = [4,5,6]
-	* ooooxxxoo = [5,6,7]
-	*
-	* You can see that we created 5 possible options.
-	* 
-	*/
-	createEmptyOptions: function(from, to, duration) {
-		return this.createDateRange(from, to).map(function(date) {
-			return d3.range(duration).map(function(i) { 
-				return {
-					date: date.clone().addDays(i),
-					load: 0
-				};
-			})
-		});
-	},
-	
-	
 	createEmptySlots: function(from, to, portfolio) {
 	
 		return d3.range(App.Utils.daysDiff(from, to)).map(function(offset) {
@@ -261,130 +237,10 @@ App.ApplicationController = Em.ObjectController.extend({
 	},
 	
 	
-	/**
-	* Creates an Array of dates for the specified range.
-	*
-	* @param {Date} from A from date for the range.
-	* @param {Date} to A to date for the range
-	*
-	* @returns {Array.<Date>} An array of dates for the specified range. 
-	*/
-	createDateRange: function(from, to) {
-		return d3.range(App.Utils.daysDiff(from, to)).map(function(offset) {
-			return from.clone().addDays(offset);
-		});
-	},
 	
 	
-	/**
-	* This method will find the best suggestion for the provided group.
-	* Please note that this method is recursive.
-	*
-	* @param {Group} group SlickGrid's Group object (https://github.com/mleibman/SlickGrid/wiki/DataView).
-	* @param {Date} due Due date of the new request.
-	* @param {Date} duration Duration (in days) of the new request.
-	* @param {Number} eliminate Index of the item to exclude in the group.
-	*
-	* @returns {Object} An object containing the best option in the group.
-	*	{
-	*		start: {Date},
-	*		replace: {Request}
-	*	} 
-	*/
-	findSuggestionsForGroup: function(current, due, duration, eliminate) {
-		var self = this,
-			maxLoad = 3,
-			maxLoadTolerance = 2, 
-			printDetails = self.get('printDetails'),
-			today = Date.today(),
-			options = self.createEmptyOptions(today, due.clone().addDays(-duration), duration);
-		
-		if (!Em.isNone(eliminate)) {
-			// sort by score so the first replace option is a request with the lowest score
-			groupRows = current.slice(0).sort(function(a, b) { return d3.ascending(a.score, b.score) || d3.descending(a.due, b.due); });
-			if (printDetails) console.log('ELIMINATE --> ' + eliminate);
-		}
-		
-		options.forEach(function(option) {
-		
-			option.forEach(function(day) {
-			
-				// this is a load for the new request
-				day.load++;
-				
-				current.forEach(function(row, i) {
-					
-					if (eliminate !== i) {
-					
-						if (day.date.between(row.start, row.end.clone().addDays(-1))) // note -1 day
-							day.load++;
-							
-					}
-					
-				});
-			
-			});
-		
-		});
-		
-		
-		if (printDetails) {
-			console.log('with overload, total: ' + options.length);
-			self.printResult(options, printDetails);
-		}
-		
-		
-		// filter out options that have 3 or more days
-		options = options.filter(function(option) {
-			return option.filter(function(day) { return day.load >= maxLoad; }).length <= maxLoadTolerance;
-		});
-		
-		if (printDetails) {
-			console.log('without overload, total: ' + options.length);
-			self.printResult(options, printDetails);
-		}
-		
-		
-		// if no options are found we are going to try to suggest a
-		// request with less value to be replaced.
-		if (options.length === 0) {
-			
-			eliminate = Em.isNone(eliminate) ? 0 : ++eliminate;
-			
-			if (eliminate < current.length) {
-				return self.findSuggestionsForGroup(current, due, duration, eliminate);
-			} else {
-				return null;
-			}
-		} 
-		
-		else if (options.length > 0) {
-		
-			var allOptions = options.map(function(option) {
-			
-				var speed = App.Utils.daysDiff(today, option[0].date),
-					load = d3.sum(option.getEach('load')),
-					score = speed + load;
-			
-				return {
-					option: option,
-					speed: speed,
-					load: load,
-					score: speed + load,
-					replace: current[eliminate]
-				}
-			
-			})
-			.sort(function(a, b) { return d3.ascending(a.score, b.score) || d3.ascending(a.speed, b.speed); });
-			
-			var bestOption = allOptions[0]; // return the best (first after sorting) option
-			
-			return {
-				start: bestOption.option[0].date,
-				replace: bestOption.replace
-			}
-		}
-	},
+	
+	
 	
 	
 	calculateUsedSlots: function(requests, from, to) {
@@ -524,66 +380,7 @@ App.ApplicationController = Em.ObjectController.extend({
 			self.send('randomize');
 		},
 		
-		getSuggestions: function(newRequest) {
-			var self = this,
-				today = Date.today(),
-				groups = self.get('dataView').getGroups();
-			
-			
-			var results = [];
-			
-			groups.forEach(function(group) {
-				console.log('-----------------------------');
-				console.debug('Looking through: ' + group.value);
-			
-				var groupBestSuggestion = self.findSuggestionsForGroup(group.rows, newRequest.due, newRequest.duration);
-				
-				if (groupBestSuggestion) {
-					groupBestSuggestion.analyst = group.value;
-					results.push(groupBestSuggestion);
-				}
-			
-			
-			});
-			
-			// remove all the nulls
-			results = results.compact();
-			
-			if (results.length) {
-			
-				console.log('-----------------------------');
-				console.info('SUGGESTIONS');
-				console.log('-----------------------------');
-			
-				// sort the results - no replacement, lower score, sooner start
-				results.sort(function(a,b) {
-					return d3.ascending(Boolean(a.replace), Boolean(b.replace)) || 
-						(Boolean(a.replace) ?
-							d3.ascending(a.replace.score, b.replace.score) :
-							d3.ascending(a.start, b.start));
-				});
-			
-				self.set('suggestions', results);
-				
-				// if all the results suggest a replacement we will find a suggestion
-				// where we move the due date to later
-				if (results.getEach('replace').compact().length === results.length) {
-				
-					self.set('delayed', self.findDelayedSuggestion(newRequest, groups));
-				
-				}
-			
-			} else if (results.length === 0) {
-			
-				console.debug('-----------------------------');
-				console.warn('SORRY, CAN\'T DO! It will have to be delayed.');
-				
-				self.set('delayed', self.findDelayedSuggestion(newRequest, groups));
-			
-			}
-			
 		
-		},
 		
 		
 		collapseAll: function() {

@@ -1,6 +1,6 @@
 App.IndexController = Em.ArrayController.extend({
 
-	needs: ['application'],
+	needs: ['application', 'assignees'],
 
 	printDetails: false,
 
@@ -11,6 +11,7 @@ App.IndexController = Em.ArrayController.extend({
 	future: Em.computed.alias('controllers.application.future'),
 	duration: Em.computed.alias('controllers.application.duration'),
 	groups: Em.computed.alias('controllers.application.groups'),
+	assignees: Em.computed.alias('controllers.assignees'),
 	
 	groupItemMetadataProvider: Em.computed.alias('controllers.application.groupItemMetadataProvider'),
 	
@@ -52,7 +53,7 @@ App.IndexController = Em.ArrayController.extend({
 			id: 'start',
 			field: 'start',
 			formatter: function(row, cell, value, column, data) {
-				return data[column.field].toString('d MMM');
+				return data.get(column.field).toString('d MMM');
 			},
 		},
 		{
@@ -60,7 +61,7 @@ App.IndexController = Em.ArrayController.extend({
 			id: 'end',
 			field: 'end',
 			formatter: function(row, cell, value, column, data) {
-				return data[column.field].toString('d MMM');
+				return data.get(column.field).toString('d MMM');
 			}
 		},
 		{
@@ -68,7 +69,7 @@ App.IndexController = Em.ArrayController.extend({
 			id: 'due',
 			field: 'due',
 			formatter: function(row, cell, value, column, data) {
-				return data[column.field].toString('d MMM');
+				return data.get(column.field).toString('d MMM');
 			}
 		},
 		{
@@ -190,7 +191,7 @@ App.IndexController = Em.ArrayController.extend({
 	*		replace: {Request}
 	*	} 
 	*/
-	findSuggestionsForGroup: function(current, due, duration, eliminate) {
+	findSuggestionsForGroupOld: function(current, due, duration, eliminate) {
 		var self = this,
 			maxLoad = 3,
 			maxLoadTolerance = 2, 

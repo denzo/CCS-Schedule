@@ -21,9 +21,31 @@ App.ApplicationRoute = Em.Route.extend({
 				});
 			});
 		}).then(function(products) {
-			appController.set('campaigns', App.Campaign.find());
+			// set the loaded products
 			appController.set('products', products);
-			appController.set('tasks', self.fake(5));
+			
+			// set the loaded campaigns
+			appController.set('campaigns', App.Campaign.find());
+			
+			
+			console.time('createFakeTasks');
+			self.controllerFor('tasks').addObjects(self.fake(100));
+			console.timeEnd('createFakeTasks');
+			
+			
+			var assigneesController = self.controllerFor('assignees');
+			
+			appController.get('analysts').forEach(function(analyst) {
+			
+				assigneesController.addObject(App.AssigneeController.create({
+					assignee: analyst,
+					all: self.controllerFor('tasks')
+				}));
+			
+			});
+			
+			appController.set('fakePool', self.fake(10));
+			
 		});
 	},
 	
@@ -48,7 +70,7 @@ App.ApplicationRoute = Em.Route.extend({
 		
 		dataView.setGrouping([controller.get('groups').findBy('field', 'assignee')]);
 		dataView.beginUpdate();
-        dataView.setItems(controller.get('tasks'));
+        dataView.setItems(controller.get('tasks.content'));
 		dataView.setFilter(function(item, args) {
 			if (!args) return true;
 			
@@ -133,6 +155,12 @@ App.ApplicationRoute = Em.Route.extend({
 	
 	
 	actions: {
+	
+		addFake: function() {
+			var self = this;
+			
+			self.controllerFor('tasks').addObject(self.controllerFor('application').get('fakePool').shiftObject());
+		},
 	
 		restart: function(total) {
 			var self = this;

@@ -15,7 +15,7 @@
 		<div class="control-group">
 			<label class="control-label">Type</label>
 			<div class="controls">
-				{{view Ember.Select contentBinding="campaignTaskTypes" valueBinding="type"}}
+				{{view Ember.Select content=categories value=category}}
 			</div>
 		</div>
 		<div class="control-group">
@@ -33,7 +33,8 @@
 		</div>
 		
 		<div class="form-actions">
-			<button class="btn btn-primary btn-save" {{action findAssignee this}}>Find assignee</button>
+			<button class="btn btn-primary btn-save" {{action getSuggestions this}}>Get suggestions</button>
+			<button class="btn btn-primary btn-save" {{action addFake}}>Add fake</button>
 		</div>
 	</form>
 </script>
