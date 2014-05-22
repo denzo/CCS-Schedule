@@ -59,9 +59,9 @@ App.LaneRenderer = {
 
 		duration.enter().append('rect')
 			.style('shape-rendering', 'crispEdges')
-			.attr('x', function(d) { return x(d.start); })
+			.attr('x', function(d) { return x(d.get('start')); })
 			.attr('y', top)
-			.attr('width', function(d) { return x(d.end) - x(d.start); })
+			.attr('width', function(d) { return x(d.get('end')) - x(d.get('start')); })
 			.attr('height', itemHeight)
 			.attr('fill', function(d) {
 				return '#ccccff';
