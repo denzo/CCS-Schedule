@@ -16,7 +16,7 @@ App.AssigneeController = Em.ObjectController.extend({
 			tasks = self.get('tasks'),
 			today = Date.today();
 		return tasks.filter(function(task) {
-			return task.get('start').isAfter(today) || task.get('end').isAfter(today);
+			return task.get('end').isAfter(today);
 		});
 	}.property('tasks.@each.start', 'tasks.@each.end')
 
