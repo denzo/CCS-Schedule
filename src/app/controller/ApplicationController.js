@@ -110,8 +110,8 @@ App.ApplicationController = Em.ObjectController.extend({
 				field: 'category',
 				getter: function(d) { return d.get(this.field); },
 				comparer: function(a, b) { return d3.ascending(a.value.toLowerCase(), b.value.toLowerCase()); },
+				formatter: function(group) { return group.value + ' <span class="total">' + group.count + '</span>'; },
 				sort: function(a, b) { return d3.ascending(a.get('start'), b.get('start')); }
-					
 			},
 			{
 				field: 'monthStart',
