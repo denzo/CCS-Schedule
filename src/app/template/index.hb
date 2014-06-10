@@ -11,10 +11,12 @@
 			<button {{action 'groupBy' 'campaign.portfolio'}}>Portfolio</button>
 			<button {{action 'groupBy' 'campaign.title'}}>Campaign</button>
 			<button {{action 'groupBy' 'category'}}>Category</button>
+			<!--
 			<button {{action 'groupBy' 'monthStart'}}>Started in month</button>
 			<button {{action 'groupBy' 'monthEnd'}}>Ended in month</button>
 			<button {{action 'groupBy' 'weekStart'}}>Started in week</button>
 			<button {{action 'groupBy' 'weekEnd'}}>Ended in week</button>
+			-->
 		</div>
 	</div>
 	<br>
