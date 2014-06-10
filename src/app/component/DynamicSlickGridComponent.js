@@ -66,7 +66,6 @@ App.DynamicSlickGridComponent = Em.View.extend({
 	
 	
 	didInsertElement: function() {
-		
 		var self = this,
 			dataView = self.get('dataView'),
 			grid = self.get('grid');
@@ -79,6 +78,8 @@ App.DynamicSlickGridComponent = Em.View.extend({
 		grid.registerPlugin(self.get('groupItemMetadataProvider'));
 		grid.onSort.subscribe($.proxy(self, 'onSort'));
 		
+		// TODO: Since dataView is kept alive and lives on the ApplicationController
+		// everytime this component is rendered we subscribe to the same event over and over
 		dataView.onRowCountChanged.subscribe($.proxy(self, 'onRowCountChanged'));
         dataView.onRowsChanged.subscribe($.proxy(self, 'onRowsChanged'));
 		
@@ -172,18 +173,23 @@ App.DynamicSlickGridComponent = Em.View.extend({
 	onRowsChanged: function(e, args) {
 		var self = this,
 			grid = self.get('grid');
-			
-		grid.invalidate();
-		//grid.invalidateRows(args.rows); // this does update the last row :(
-        grid.render();
+		
+		if (grid) {
+			grid.invalidate();
+			//grid.invalidateRows(args.rows); // this does update the last row :(
+	        grid.render();
+		}
 	},
 	
 	onRowCountChanged: function(e, args) {
 		var self = this,
 			grid = self.get('grid');
 		
-		grid.updateRowCount();
-        grid.render();
+		if (grid) {
+			grid.updateRowCount();
+        	grid.render();
+        }
+        
 	},
 	
 	heightChangeHandler: function() {

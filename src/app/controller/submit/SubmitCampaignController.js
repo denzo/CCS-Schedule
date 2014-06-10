@@ -1,10 +1,13 @@
 App.SubmitCampaignController = Em.ObjectController.extend({
 
-	needs: ['application'],
+	needs: ['application', 'suggestions'],
 
-	categories: ['pre-analysis', 'development', 'reporting', 'PIR', 'Other'],
-	
+	categories: Em.computed.alias('controllers.application.categories'),
 	campaigns: Em.computed.alias('controllers.application.campaigns'),
+	suggestions: Em.computed.alias('controllers.suggestions'),
+	assignees: Em.computed.alias('controllers.assignees'),
+	
+	ninjas: Em.computed.alias('controllers.application.ninjas'),
 	
 	searchable: function() {
 	
@@ -21,6 +24,10 @@ App.SubmitCampaignController = Em.ObjectController.extend({
 	
 		change: function(campaign) {
 			this.set('campaign', campaign);
+		},
+		
+		helpMe: function() {
+			console.log('App.SubmitCampaignController.actions.helpMe');
 		}
 	
 	}

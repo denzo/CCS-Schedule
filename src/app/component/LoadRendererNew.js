@@ -1,4 +1,4 @@
-App.LoadRendererNew = {
+App.LoadRenderer = {
 
 	render: function(container, data, width, height) {
 	

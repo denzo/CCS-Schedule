@@ -457,14 +457,29 @@ App.FakeAdapter = App.SPAdapter.extend({
 		
 		// delay
 		Em.run.later(self, function() {
-			self.didCreateRecord(record, record);
+			self.didCreateRecord(record, record._fake);
+			delete record._fake;
+			deferred.resolve(record);
+		}, 10);
+		
+		return deferred.promise();
+	},
+	
+	
+	deleteRecord: function(record) {
+		var deferred = $.Deferred(),
+			self = this;
+			
+		// delay
+		Em.run.later(self, function() {
+			self.didDeleteRecord(record, record._fake);
+			//self.didDeleteRecord(record, self.parse(response, record.constructor).get(0));
 			deferred.resolve(record);
 		}, 1000);
 		
 		return deferred.promise();
 	}
-
-
+	
 });
 
 
@@ -1234,6 +1249,7 @@ App.Task = Em.Model.extend({
 	*/
 	project: Em.belongsTo('App.Project', {key: 'project_id'}),
 	
+	
 	/**
 	* {App.Campaign} A campaign that the task belongs to.
 	*/
@@ -1275,6 +1291,18 @@ App.Task.primaryKey = 'ID';
 App.Task.url = '@environment@-task';
 App.Task.fixture = 'data/fixtures/task.xml';
 App.Task.adapter = '@environment@' === 'local' ? App.FakeAdapter.create() : App.SPAdapter.create();
+
+
+App.Task.reopenClass({
+	
+	_id: 0,
+	
+	createID: function() {
+		App.Task._id += 1;
+		return App.Task._id;
+	}
+
+});
 
 
 
@@ -1344,7 +1372,30 @@ App.Project.adapter = '@environment@' === 'local' ? App.FakeAdapter.create() : A
 
 
 
+App.Suggestion = Em.Object.extend({
 
+	/**
+	* {App.Task}
+	*/
+	task: null,
+
+	/**
+	* {App.AssigneeController}
+	*/
+	assignee: null,
+	
+	/**
+	* {App.SuggestionOption}
+	*/
+	option: null,
+	
+	
+	/**
+	* {Number} A total number of days pass the task's due date.
+	*/
+	delay: 0
+
+});
 
 
 
@@ -1393,8 +1444,15 @@ App.SuggestionOption = Em.ArrayController.extend({
 	/**
 	* {App.Task} A task that is suggested to be replaced.
 	*/
-	replace: null
+	replace: null,
 	
+	/**
+	* @param {Number} maxLoad Maximum number or tasks per day.
+	* @param {Number} maxLoadTolerance Maximum number of days with maxLoad.
+	*/
+	isSuccessful: function(maxLoad, maxLoadTolerance) {
+		return this.filter(function(day) { return day.get('load') >= maxLoad; }).length <= maxLoadTolerance;
+	}
 });
 
 App.DayLoad = Em.Object.extend({
@@ -1408,7 +1466,7 @@ App.DayLoad = Em.Object.extend({
 	/**
 	* {Number} A number of tasks on the day (refer to 'date' property).
 	*/
-	load: null,
+	load: 0,
 	
 	
 	/**
@@ -1420,6 +1478,39 @@ App.DayLoad = Em.Object.extend({
 			
 		self.set('load', load + 1);
 	}
+
+});
+
+App.Assignee = Em.Object.extend({
+
+	/**
+	* {String} Full name of the assignee
+	*/
+	name: null,
+	
+	
+	/**
+	* A list of portfolios that the assignee is available to work on.
+	*
+	* {Array.<String>}
+	*/
+	portfolios: null
+
+});
+
+
+App.Filter = Em.Object.extend({
+
+	/**
+	* {String} Group name
+	*/
+	group: null,
+	
+	
+	/**
+	* {String} Value
+	*/
+	value: null
 
 });
 

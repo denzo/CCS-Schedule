@@ -174,8 +174,10 @@ App.SlickGridComponent = Em.View.extend({
 		var self = this,
 			grid = self.get('grid');
 		
-		grid.updateRowCount();
-        grid.render();
+		if (grid) {
+			grid.updateRowCount();
+        	grid.render();
+        }
         
         self.set('total', self.get('dataView').getLength());
 	},

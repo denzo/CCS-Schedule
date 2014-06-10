@@ -77,6 +77,50 @@ App.Utils.reopenClass({
 		return days < 0 ? 0 : Math.floor(days);
     },
     
+    
+    /**
+    * @param {Date} from
+    * @param {Date} to
+    *
+    * @returns {Array.<Date>} An array of dates for the specified range.
+    * The array does not include weekends. The specified from and to params are 
+    * included into the range.
+    */
+    weekdayRange: function(from, to) {
+    	var date = from.clone(),
+    		result = [];
+		while (!date.isAfter(to)) {
+			if (date.getDay() !== 6 && date.getDay() !== 0) { // exclude Sat and Sun
+				result.push(date.clone());
+			}
+			date.addDays(1);
+		}
+		return result;
+    },
+
+    
+    /**
+    * @param {Date} from
+    * @param {Number} duration
+    *
+    * @returns {Array.<Date>} An array of dates for the specified range based on
+    * the specified duration. The result does not include weekends.
+    */
+    weekdayRangeFromDuration: function(from, duration) {
+    	var date = from.clone(),
+    		result = [];
+    	
+    	while (result.length < duration) {
+	    	if (date.getDay() !== 6 && date.getDay() !== 0) { // exclude Sat and Sun
+				result.push(date.clone());
+			}
+    		date.addDays(1);
+    	}
+    	
+    	return result;
+    },
+    
+    
     humanDateHint: function(date) {
 	
 		if (!date) return;

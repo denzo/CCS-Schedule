@@ -1,10 +1,9 @@
 App.IndexController = Em.ArrayController.extend({
 
-	needs: ['application', 'assignees'],
+	needs: ['application', 'assignees', 'tasks', 'taskReports', 'filters'],
 
 	printDetails: false,
 
-	dataView: Em.computed.alias('controllers.application.dataView'),
 	range: Em.computed.alias('controllers.application.range'),
 	from: Em.computed.alias('controllers.application.from'),
 	to: Em.computed.alias('controllers.application.to'),
@@ -13,7 +12,14 @@ App.IndexController = Em.ArrayController.extend({
 	groups: Em.computed.alias('controllers.application.groups'),
 	assignees: Em.computed.alias('controllers.assignees'),
 	
+	categoryTotals: Em.computed.alias('controllers.application.categoryTotals'),
+	portfolioTotals: Em.computed.alias('controllers.application.portfolioTotals'),
+	rangeTasks: Em.computed.alias('controllers.application.rangeTasks'),
+	
 	groupItemMetadataProvider: Em.computed.alias('controllers.application.groupItemMetadataProvider'),
+	
+	tasks: Em.computed.alias('controllers.tasks'),
+	taskReports: Em.computed.alias('controllers.taskReports'),
 	
 	
 	request: null,
@@ -35,23 +41,30 @@ App.IndexController = Em.ArrayController.extend({
 		{
 			name: 'Title',
 			id: 'title',
+			width: 200,
 			field: 'campaign.title',
-			cssClass: 'indent'
+			cssClass: 'indent',
+			formatter: function(row, cell, value, column, data) {
+				return '<a href="#/task/' + data.get('id') + '">' + data.get('campaign.title') + '</a>';
+			},
 		},
 		{
 			name: 'Portfolio',
 			id: 'portfolio',
+			width: 75,
 			field: 'campaign.portfolio'
 		},
 		{
-			name: 'Type', 
-			id: 'type',
-			field: 'type'
+			name: 'Category', 
+			id: 'category',
+			width: 75,
+			field: 'category'
 		},
 		{
 			name: 'Start',
 			id: 'start',
 			field: 'start',
+			width: 50,
 			formatter: function(row, cell, value, column, data) {
 				return data.get(column.field).toString('d MMM');
 			},
@@ -60,6 +73,7 @@ App.IndexController = Em.ArrayController.extend({
 			name: 'End',
 			id: 'end',
 			field: 'end',
+			width: 50,
 			formatter: function(row, cell, value, column, data) {
 				return data.get(column.field).toString('d MMM');
 			}
@@ -68,14 +82,10 @@ App.IndexController = Em.ArrayController.extend({
 			name: 'Due',
 			id: 'due',
 			field: 'due',
+			width: 50,
 			formatter: function(row, cell, value, column, data) {
 				return data.get(column.field).toString('d MMM');
 			}
-		},
-		{
-			name: 'Score',
-			id: 'score',
-			field: 'score'
 		},
 		{
 			headerCssClass: 'lane-header',
@@ -88,77 +98,12 @@ App.IndexController = Em.ArrayController.extend({
 			},
 			asyncPostRender: function(cell, row, data, column) {
 				
-				App.LaneRenderer.render(cell, data, self.get('from'), (self.get('future') + 1) * 7);
+				//App.LaneRenderer.render(cell, data, self.get('from'), (self.get('future') + 1) * 7);
+				App.LaneRendererNew.render(cell, data, self.get('from'), self.get('to'));
 			}
 		}
 		];
 	}.property(),
-	
-	
-	
-	
-	printResult: function(options, print) {
-		
-		if (!print) return;
-		
-		var results = options.map(function(option) {
-			var speed = App.Utils.daysDiff(today, option[0].date),
-				load = d3.sum(option.getEach('load')),
-				score = speed + load;
-		
-			return option[0].date.toString('dd MMM') + ' = ' + App.Utils.pad(speed, 2) + ' | ' + 
-				option.getEach('load').join(',') + ' = ' + App.Utils.pad(load, 2) + ' | ' + 
-				'Score: ' + App.Utils.pad(score, 2);
-		
-		});
-		
-		results.forEach(function(result) {
-			console.log(result);
-		});
-	
-	},
-	
-	/**
-	* This method creates all available empty options. An "option" is an array of dates
-	* with associated load (number of tasks on the same day mean "load") against it.
-	* "Option" has a length of the provided duration. 
-	*
-	*      Due
-	*       |
-	* xxxoooooo = [1,2,3]
-	* oxxxooooo = [2,3,4]
-	* ooxxxoooo = [3,4,5]
-	* oooxxxooo = [4,5,6]
-	* ooooxxxoo = [5,6,7]
-	*
-	* You can see that we created 5 possible options.
-	* 
-	*/
-	createEmptyOptions: function(from, to, duration) {
-		return this.createDateRange(from, to).map(function(date) {
-			return d3.range(duration).map(function(i) { 
-				return {
-					date: date.clone().addDays(i),
-					load: 0
-				};
-			})
-		});
-	},
-	
-	
-	createEmptySlots: function(from, to, portfolio) {
-	
-		return d3.range(App.Utils.daysDiff(from, to)).map(function(offset) {
-		
-			return {
-				portfolio: portfolio,
-				date: from.clone().addDays(offset),
-				load: 0
-			};
-		
-		});
-
-	},
 	
 	
 	/**
@@ -176,117 +121,6 @@ App.IndexController = Em.ArrayController.extend({
 	},
 	
 	
-	/**
-	* This method will find the best suggestion for the provided group.
-	* Please note that this method is recursive.
-	*
-	* @param {Group} group SlickGrid's Group object (https://github.com/mleibman/SlickGrid/wiki/DataView).
-	* @param {Date} due Due date of the new request.
-	* @param {Date} duration Duration (in days) of the new request.
-	* @param {Number} eliminate Index of the item to exclude in the group.
-	*
-	* @returns {Object} An object containing the best option in the group.
-	*	{
-	*		start: {Date},
-	*		replace: {Request}
-	*	} 
-	*/
-	findSuggestionsForGroupOld: function(current, due, duration, eliminate) {
-		var self = this,
-			maxLoad = 3,
-			maxLoadTolerance = 2, 
-			printDetails = self.get('printDetails'),
-			today = Date.today(),
-			options = self.createEmptyOptions(today, due.clone().addDays(-duration), duration);
-		
-		if (!Em.isNone(eliminate)) {
-			// sort by score so the first replace option is a request with the lowest score
-			groupRows = current.slice(0).sort(function(a, b) { return d3.ascending(a.score, b.score) || d3.descending(a.due, b.due); });
-			if (printDetails) console.log('ELIMINATE --> ' + eliminate);
-		}
-		
-		options.forEach(function(option) {
-		
-			option.forEach(function(day) {
-			
-				// this is a load for the new request
-				day.load++;
-				
-				current.forEach(function(row, i) {
-					
-					if (eliminate !== i) {
-					
-						if (day.date.between(row.start, row.end.clone().addDays(-1))) // note -1 day
-							day.load++;
-							
-					}
-					
-				});
-			
-			});
-		
-		});
-		
-		
-		if (printDetails) {
-			console.log('with overload, total: ' + options.length);
-			self.printResult(options, printDetails);
-		}
-		
-		
-		// filter out options that have 3 or more days
-		options = options.filter(function(option) {
-			return option.filter(function(day) { return day.load >= maxLoad; }).length <= maxLoadTolerance;
-		});
-		
-		if (printDetails) {
-			console.log('without overload, total: ' + options.length);
-			self.printResult(options, printDetails);
-		}
-		
-		
-		// if no options are found we are going to try to suggest a
-		// request with less value to be replaced.
-		if (options.length === 0) {
-			
-			eliminate = Em.isNone(eliminate) ? 0 : ++eliminate;
-			
-			if (eliminate < current.length) {
-				return self.findSuggestionsForGroup(current, due, duration, eliminate);
-			} else {
-				return null;
-			}
-		} 
-		
-		else if (options.length > 0) {
-		
-			var allOptions = options.map(function(option) {
-			
-				var speed = App.Utils.daysDiff(today, option[0].date),
-					load = d3.sum(option.getEach('load')),
-					score = speed + load;
-			
-				return {
-					option: option,
-					speed: speed,
-					load: load,
-					score: speed + load,
-					replace: current[eliminate]
-				}
-			
-			})
-			.sort(function(a, b) { return d3.ascending(a.score, b.score) || d3.ascending(a.speed, b.speed); });
-			
-			var bestOption = allOptions[0]; // return the best (first after sorting) option
-			
-			return {
-				start: bestOption.option[0].date,
-				replace: bestOption.replace
-			}
-		}
-	},
-	
-	
 	calculateUsedSlots: function(requests, from, to) {
 		var self = this,
 			range = self.createDateRange(from, to);
@@ -300,154 +134,14 @@ App.IndexController = Em.ArrayController.extend({
 		}));
 	},
 	
-	
-	
-	
-	
-	
-	
-	
-
-	
-	
-	suggestions: null,
-	delayed: null,
-	
-	
-	findDelayedSuggestion: function(newRequest, groups) {
-		var self = this,
-			results = [],
-			originalDueDate = newRequest.get('due').clone();
-				
-		groups.forEach(function(group) {
-			var groupSuggestion = null;
-			
-			while (!(groupSuggestion && groupSuggestion.replace === undefined)) {
-				groupSuggestion = self.findSuggestionsForGroup(group.rows, newRequest.due, newRequest.duration);
-				newRequest.get('due').addDays(1);
-			}
-			
-			groupSuggestion.analyst = group.value;
-			
-			results.push(groupSuggestion);
-			
-			newRequest.set('due', originalDueDate.clone());
-		});
-		
-		// sort by the sooner start date and get the first option
-		var result = results.sort(function(a, b) { return d3.ascending(a.start, b.start); })[0];
-		
-		var newDue = result.start.clone().addDays(newRequest.duration);
-		
-		return {
-			originalDue: originalDueDate,
-			newDue: newDue, // mega important
-			analyst: result.analyst,
-			diff: App.Utils.daysDiff(originalDueDate, newDue),
-			start: result.start
-		};
-	
-	},
-	
-	
-	
-	
-	
-	
 	actions: {
 	
-		addRequest: function(suggestion) {
-			var self = this,
-				newRequest = self.get('request');
-			
-			newRequest.analyst = suggestion.analyst;
-			newRequest.start = suggestion.start;
-			newRequest.end = newRequest.start.clone().addDays(newRequest.duration);
-			
-			self.addObject(newRequest);
-			self.send('randomize');
-		},
-	
-		addRequestWithDelay: function(suggestion) {
-			var self = this,
-				newRequest = self.get('request');
-			
-			newRequest.analyst = suggestion.analyst;
-			newRequest.start = suggestion.start;
-			newRequest.end = newRequest.start.clone().addDays(newRequest.duration);
-			
-			self.addObject(newRequest);
-			self.send('randomize');
-		},
-		
-		getSuggestions: function(newRequest) {
-			var self = this,
-				today = Date.today(),
-				groups = self.get('dataView').getGroups();
-			
-			
-			var results = [];
-			
-			groups.forEach(function(group) {
-				console.log('-----------------------------');
-				console.debug('Looking through: ' + group.value);
-			
-				var groupBestSuggestion = self.findSuggestionsForGroup(group.rows, newRequest.due, newRequest.duration);
-				
-				if (groupBestSuggestion) {
-					groupBestSuggestion.analyst = group.value;
-					results.push(groupBestSuggestion);
-				}
-			
-			
-			});
-			
-			// remove all the nulls
-			results = results.compact();
-			
-			if (results.length) {
-			
-				console.log('-----------------------------');
-				console.info('SUGGESTIONS');
-				console.log('-----------------------------');
-			
-				// sort the results - no replacement, lower score, sooner start
-				results.sort(function(a,b) {
-					return d3.ascending(Boolean(a.replace), Boolean(b.replace)) || 
-						(Boolean(a.replace) ?
-							d3.ascending(a.replace.score, b.replace.score) :
-							d3.ascending(a.start, b.start));
-				});
-			
-				self.set('suggestions', results);
-				
-				// if all the results suggest a replacement we will find a suggestion
-				// where we move the due date to later
-				if (results.getEach('replace').compact().length === results.length) {
-				
-					self.set('delayed', self.findDelayedSuggestion(newRequest, groups));
-				
-				}
-			
-			} else if (results.length === 0) {
-			
-				console.debug('-----------------------------');
-				console.warn('SORRY, CAN\'T DO! It will have to be delayed.');
-				
-				self.set('delayed', self.findDelayedSuggestion(newRequest, groups));
-			
-			}
-			
-		
-		},
-		
-		
 		collapseAll: function() {
-			this.get('dataView').collapseAllGroups();
+			this.get('tasks.dataView').collapseAllGroups();
 		},
 		
 		expandAll: function() {
-			this.get('dataView').expandAllGroups();
+			this.get('tasks.dataView').expandAllGroups();
 		},
 		
 		groupBy: function(fields) {
@@ -455,6 +149,10 @@ App.IndexController = Em.ArrayController.extend({
 				dataView = self.get('dataView'),
 				groups = self.get('groups');
 				 
+			
+			self.set('controllers.application.selectedGroupList', fields.split(','));
+			
+			return;
 			dataView.setGrouping(fields.split(',').map(function(field) { return groups.findBy('field', field); }));
 			
 			var dueWeek = function(a, b) {
@@ -468,72 +166,18 @@ App.IndexController = Em.ArrayController.extend({
 			var comparer = function(a, b) {
 				return score(a,b);
 			}
-		
-			dataView.sort(comparer);
+			
+			var group = groups.findBy('field', fields);
+			
+			if (group && group.sort) {
+				dataView.sort(group.sort());
+			}
 			
 			dataView.refresh();
 		},
 		
 		
-		groupByAnalyst: function() {
 		
-			var self = this,
-				dataView = self.get('dataView');
-				
-			dataView.setGrouping({
-				getter: function(d) {
-					return d.get('assignee');
-				},
-				formatter: function(group) {
-				
-					var i = -1,
-						from = self.get('from'),
-						a = d3.range(56).map(function(d) { 
-							return {
-								date: from.clone().addDays(d),
-								load: 0
-							};
-					});
-					
-					//console.log(group.value, '---------------------');
-					a.forEach(function(d) {
-					
-						group.rows.forEach(function(row) {
-							
-							// console.log(d.date.toString('d MMM'), row.start.toString('d MMM'), row.end.toString('d MMM'), d.date.between(row.start, row.end));
-							
-							if (d.date.between(row.start, row.end.clone().addDays(-1))) // note -1 day
-								d.load++;
-							
-						});
-					
-					});
-				
-					//return group.value + '<span style="margin-left: 20px;font-size: 12px;">' + a.getEach('load').join(', ') + '</span>';
-					return group.value + ' <span class="total">' + group.count + '</span>' + App.LoadRenderer.render(document.createElement('div'), a.getEach('load'), 560, 12);
-					
-				}
-			});
-			
-			var analyst = function(a, b) {
-				return  d3.ascending(a.analyst, b.analyst);
-			}
-		
-			var start = function(a, b) {
-				return d3.ascending(a.start, b.start);
-			}
-			
-			var score = function(a, b) {
-				return d3.descending(a.score, b.score);
-			}
-			
-			var comparer = function(a, b) {
-				return analyst(a,b) || start(a,b) || score(a,b);
-			}
-		
-			dataView.sort(comparer);
-		
-		},
 		
 		
 		groupByPortfolioDueDate: function() {
@@ -581,35 +225,9 @@ App.IndexController = Em.ArrayController.extend({
 			
 			self.set('from', range[0]);
 			self.set('to', range[1]);
-		},
-		
-		randomize: function() {
-			var self = this,
-				campaign = App.Random.select(self.campaigns(100)),
-				requestId = self.get('content.length') + 1,
-				created = Date.today(),
-				type = App.Random.select(self.get('types')), 
-				due = created.clone().addDays(App.Random.within(15, 20)),
-				dueWeek = d3.time.monday(due.clone());
-				
-				
-			self.set('request', Em.Object.create({
-				id: requestId,
-				type: type,
-				title: campaign.title,
-				portfolio: campaign.portfolio,
-				objective: campaign.objective,
-				created: created,
-				due: due,
-				dueWeek: dueWeek,
-				duration: App.Random.within(5, 15),
-				score: App.Random.within(100, 1000)
-			}));
-			
-			self.set('suggestions', null);
-			self.set('delayed', null);
-			
 		}
+		
+		
 	
 	}
 

@@ -2,7 +2,8 @@ App.ApplicationRoute = Em.Route.extend({
 
 	afterModel: function(params) {
 		var self = this,
-			appController = self.controllerFor('application');
+			appController = self.controllerFor('application'),
+			assigneesController = self.controllerFor('assignees');
 		
 		return Em.RSVP.all([
 			App.Campaign.fetch(),
@@ -27,24 +28,26 @@ App.ApplicationRoute = Em.Route.extend({
 			// set the loaded campaigns
 			appController.set('campaigns', App.Campaign.find());
 			
-			
-			console.time('createFakeTasks');
-			self.controllerFor('tasks').addObjects(self.fake(100));
-			console.timeEnd('createFakeTasks');
-			
-			
-			var assigneesController = self.controllerFor('assignees');
-			
+			// populate assignees controller
 			appController.get('analysts').forEach(function(analyst) {
 			
-				assigneesController.addObject(App.AssigneeController.create({
-					assignee: analyst,
-					all: self.controllerFor('tasks')
+				assigneesController.addObject(App.Assignee.create({
+					name: analyst,
+					portfolios: [App.Random.select(products.getEach('portfolio'))]
 				}));
-			
+				
 			});
 			
-			appController.set('fakePool', self.fake(10));
+			return Em.RSVP.all(self.fake(100).map(function(task) { return task.save(); }));
+			
+		}).then(function(tasks) {
+		
+			self.controllerFor('tasks').set('content', tasks);
+			
+			self.controllerFor('taskReports')
+				.addReport('category', 'category', appController.get('categories'))
+				.addReport('objective', 'campaign.objective', appController.get('objectives'))
+				.addReport('portfolio', 'campaign.portfolio', appController.get('portfolios'));
 			
 		});
 	},
@@ -53,69 +56,14 @@ App.ApplicationRoute = Em.Route.extend({
 	setupController: function(controller, model) {
 		this._super(controller, model);
 		
-		var self = this,
-			today = Date.today(),
-			from = controller.get('from'),
-			to = today.clone().moveToDayOfWeek(0).addWeeks(7);
+		var self = this;
 		
+		self.controllerFor('filters')
+			.addFilter('Portfolio', 'campaign.portfolio', controller.get('portfolios'))
+			.addFilter('Objective', 'campaign.objective', controller.get('objectives'))
+			.addFilter('Analyst', 'assignee', controller.get('analysts'))
+			.addFilter('Category', 'category', controller.get('categories'));
 		
-		
-		
-		
-		var groupItemMetadataProvider = new Slick.Data.GroupItemMetadataProvider(),
-			dataView = new Slick.Data.DataView({groupItemMetadataProvider: groupItemMetadataProvider});
-			
-		controller.set('dataView', dataView);
-		controller.set('groupItemMetadataProvider', groupItemMetadataProvider);
-		
-		dataView.setGrouping([controller.get('groups').findBy('field', 'assignee')]);
-		dataView.beginUpdate();
-        dataView.setItems(controller.get('tasks.content'));
-		dataView.setFilter(function(item, args) {
-			if (!args) return true;
-			
-			if (args.range) {
-				var range = args.range,
-				from = range[0],
-				to = range[1];
-				
-				if (!item.start.between(from, to) && !item.end.between(from, to)) {
-					return false;
-				}
-			}
-			
-			return true;
-		});
-        dataView.endUpdate();
-        
-		var analyst = function(a, b) {
-			return d3.ascending(a.analyst, b.analyst);
-		}
-	
-		var start = function(a, b) {
-			return d3.ascending(a.start, b.start);
-		}
-		
-		var score = function(a, b) {
-			return d3.descending(a.score, b.score);
-		}
-		
-		var comparer = function(a, b) {
-			return analyst(a,b) || start(a,b) || score(a,b);
-		}
-	
-		dataView.sort(comparer);
-		
-		//controller.set('range', [from, to]);
-		
-	},
-	
-	dataViewFilterFunction: function(item, args) {
-		var range = args.range,
-			from = range[0],
-			to = range[1];
-			
-		return item.end.between(from, to);
 	},
 	
 	
@@ -126,28 +74,28 @@ App.ApplicationRoute = Em.Route.extend({
 			now = Date.today(),
 			campaigns = controller.get('campaigns'),
 			analysts = controller.get('analysts'),
-			types = controller.get('types'),
+			categories = controller.get('categories'),
 			result = [];
 			
 		while (++i < total) {
 			var campaign = App.Random.select(campaigns.get('content')),
-				created = now.clone().addDays(App.Random.within(-30, 0)),
+				created = now.clone().addDays(App.Random.within(-120, 0)),
 				start = created.clone().addDays(App.Random.within(0, 30)),
-				end = start.clone().addDays(App.Random.within(5, 20)),
+				end = start.clone().addDays(App.Random.within(5, 25)),
 				due = end.clone().addDays(App.Random.within(1, 15)),
 				dueWeek = due.clone().getDay() === 1 ? due.clone() : due.clone().moveToDayOfWeek(1, -1);
 			
 			result.push(App.Task.create({
-				id: i,
-				type: App.Random.select(types),
-				campaign: campaign,
-				assignee: App.Random.select(analysts),
-				created: created,
-				start: start,
-				end: end,
-				due: due,
-				dueWeek: dueWeek,
-				score: App.Random.within(100, 1000)
+				_fake: {
+					ID: App.Task.createID(),
+					category: App.Random.select(categories),
+					campaign_id: campaign.get('ID'),
+					assignee: App.Random.select(analysts),
+					created: created.toString('yyyy-MM-dd HH:mm:ss'),
+					start: start.toString('yyyy-MM-dd HH:mm:ss'),
+					end: end.toString('yyyy-MM-dd HH:mm:ss'),
+					due: due.toString('yyyy-MM-dd HH:mm:ss')
+				}
 			}));
 		}
 		return result;
@@ -156,12 +104,61 @@ App.ApplicationRoute = Em.Route.extend({
 	
 	actions: {
 	
-		addFake: function() {
+		selectFilter: function(value) {
 			var self = this;
 			
-			self.controllerFor('tasks').addObject(self.controllerFor('application').get('fakePool').shiftObject());
+			self.controllerFor('filters').selectFilter(value);
+		},
+		
+		deselectFilter: function(value) {
+			var self = this;
+			
+			self.controllerFor('filters').deselectFilter(value);
 		},
 	
+		addTask: function(task) {
+			var self = this;
+			
+			task._fake = {
+				ID: App.Task.createID(),
+				category: task.get('category'),
+				campaign_id: task.get('campaign.ID'),
+				assignee: task.get('assignee'),
+				created: task.get('created').toString('yyyy-MM-dd HH:mm:ss'),
+				start: task.get('start').toString('yyyy-MM-dd HH:mm:ss'),
+				end: task.get('end').toString('yyyy-MM-dd HH:mm:ss'),
+				due: task.get('due').toString('yyyy-MM-dd HH:mm:ss')
+			};
+			
+			task.save().then(function() {
+				self.controllerFor('tasks').addObject(task);
+			});
+		},
+		
+		updateTask: function(task) {
+			var self = this;
+			
+			task.set('end', task.get('end').clone().addDays(10));
+			
+			task.save().then(function() {
+				
+			});
+		},
+		
+		/**
+		* @param {App.Task} task
+		*/
+		removeTask: function(task) {
+			var self = this,
+				tasks = self.controllerFor('tasks');
+			
+			task.deleteRecord().then(function() {
+				tasks.removeObject(tasks.findBy('ID', task.get('ID')));
+				self.transitionTo('index');
+			});
+			
+		},
+		
 		restart: function(total) {
 			var self = this;
 			
